@@ -27,16 +27,24 @@ Where:
 
 ## Usage
 
-### Basic Usage
+### Snakemake Workflow (Recommended)
 
 ```bash
-python rfd_analyzer.py input_file.bedgraph
+# Place your .bedgraph files in workflows/inputs/ then run:
+python run_analysis.py              # Easy way (cores=1 default)
+python run_analysis.py --cores 4    # Use more cores
+```
+
+### Direct Script Usage
+
+```bash
+python scripts/rfd_analyzer.py input_file.bedgraph
 ```
 
 ### Advanced Usage
 
 ```bash
-python rfd_analyzer.py input_file.bedgraph \
+python scripts/rfd_analyzer.py input_file.bedgraph \
     -o output_prefix \
     --min-distance 10 \
     --min-prominence 0.1 \
