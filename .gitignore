@@ -1,0 +1,9 @@
+*.bed
+*.tsv
+*.tsv.gz
+*.bedgraph*
+*.bedGraph*
+*.txt
+*.png
+.venv
+__pycache__
