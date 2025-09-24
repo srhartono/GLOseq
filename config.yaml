@@ -1,0 +1,62 @@
+# Configuration file for RFD Analysis Snakemake Workflow
+# =====================================================
+
+# Analysis Parameters
+# -------------------
+
+# Peak detection parameters
+min_peak_distance: 10        # Minimum distance between peaks (in bins)
+min_peak_prominence: 0.1     # Minimum prominence for peak detection (0.05-0.3 typical range)
+
+# Optional: Analyze specific chromosome only (leave empty for all chromosomes)
+chromosome: ""               # e.g., "chr1" or "" for all
+
+# Output options
+generate_plots: true         # Generate visualization plots (true/false)
+
+# Advanced Parameters (optional)
+# ------------------------------
+
+# Smoothing options (for noisy data)
+apply_smoothing: false       # Apply smoothing to RFD data
+smoothing_window: 3          # Window size for smoothing (if enabled)
+
+# Quality filters
+min_rfd_range: 0.2          # Minimum RFD range to consider (filters flat regions)
+exclude_chromosomes: []      # List of chromosomes to exclude, e.g., ["chrY", "chrM"]
+
+# Output formats
+export_bed: true            # Export BED format files
+export_gff: false           # Export GFF format files (optional)
+
+# Resource allocation
+threads: 1                  # Number of threads for parallel processing
+
+# File patterns and naming
+# ------------------------
+input_pattern: "*.bedgraph"    # Pattern to match input files
+output_suffix: ""              # Additional suffix for output files
+
+# Analysis modes
+# --------------
+analysis_mode: "standard"      # "standard", "sensitive", or "stringent"
+
+# Mode-specific parameters (override defaults based on analysis_mode)
+modes:
+  standard:
+    min_peak_distance: 10
+    min_peak_prominence: 0.1
+  
+  sensitive:
+    min_peak_distance: 5
+    min_peak_prominence: 0.05
+  
+  stringent:
+    min_peak_distance: 15
+    min_peak_prominence: 0.2
+
+# Reporting options
+# -----------------
+create_summary_plots: true     # Create summary visualization across all samples
+include_statistics: true       # Include detailed statistics in reports
+report_format: "both"          # "text", "html", or "both"
