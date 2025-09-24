@@ -37,19 +37,29 @@ class RFDAnalyzer:
     
     def load_bedgraph(self, filepath: str) -> pd.DataFrame:
         """
-        Load RFD data from bedgraph file.
+        Load RFD data from bedgraph file (supports both .bedgraph and .bedgraph.gz).
         
         Args:
-            filepath: Path to bedgraph file
+            filepath: Path to bedgraph file (.bedgraph or .bedgraph.gz)
             
         Returns:
             DataFrame with RFD data
         """
         try:
-            # Read bedgraph file (assuming tab-separated)
-            self.data = pd.read_csv(filepath, sep='\t', 
-                                  names=['chr', 'start', 'end', 'RFD'],
-                                  comment='#')
+            import gzip
+            
+            # Check if file is gzipped based on extension or by trying to read it
+            if filepath.endswith('.gz'):
+                # Read gzipped file
+                with gzip.open(filepath, 'rt') as f:
+                    self.data = pd.read_csv(f, sep='\t', 
+                                          names=['chr', 'start', 'end', 'RFD'],
+                                          comment='#')
+            else:
+                # Read regular file
+                self.data = pd.read_csv(filepath, sep='\t', 
+                                      names=['chr', 'start', 'end', 'RFD'],
+                                      comment='#')
             
             # Sort by chromosome and position
             self.data = self.data.sort_values(['chr', 'start']).reset_index(drop=True)

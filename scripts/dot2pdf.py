@@ -88,7 +88,6 @@ def main(dotFile, dot_exe_location="dot"):
             sys.exit(1)
             
         graph = graphs[0]
-        print(output_file)
         print(f"Successfully parsed DOT file!")
         print(f"Graph has {len(graph.get_nodes())} nodes and {len(graph.get_edges())} edges")
         

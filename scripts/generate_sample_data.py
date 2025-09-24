@@ -6,7 +6,7 @@ Generate sample RFD data for testing the RFD analyzer
 import numpy as np
 import pandas as pd
 
-def generate_sample_rfd_data(output_file: str = "sample_rfd.bedgraph", 
+def generate_sample_rfd_data(output_file: str = "sample_rfd.bedgraph.gz", 
                             chromosome: str = "chr1",
                             start_pos: int = 1000000,
                             num_bins: int = 1000,
@@ -55,8 +55,13 @@ def generate_sample_rfd_data(output_file: str = "sample_rfd.bedgraph",
         'RFD': rfd_values
     })
     
-    # Save to bedgraph format
-    data.to_csv(output_file, sep='\t', index=False, header=False)
+    # Save to bedgraph format (gzipped if filename ends with .gz)
+    import gzip
+    if output_file.endswith('.gz'):
+        with gzip.open(output_file, 'wt') as f:
+            data.to_csv(f, sep='\t', index=False, header=False)
+    else:
+        data.to_csv(output_file, sep='\t', index=False, header=False)
     
     print(f"Generated {len(data)} bins of sample RFD data")
     print(f"Genomic range: {chromosome}:{start_pos:,}-{positions[-1] + bin_size:,}")
@@ -65,7 +70,7 @@ def generate_sample_rfd_data(output_file: str = "sample_rfd.bedgraph",
     
     return data
 
-def generate_multi_chromosome_data(output_file: str = "multi_chr_rfd.bedgraph"):
+def generate_multi_chromosome_data(output_file: str = "multi_chr_rfd.bedgraph.gz"):
     """Generate sample data for multiple chromosomes"""
     
     all_data = []
@@ -84,7 +89,7 @@ def generate_multi_chromosome_data(output_file: str = "multi_chr_rfd.bedgraph"):
         
         # Generate data for this chromosome
         chr_data = generate_sample_rfd_data(
-            output_file=f"temp_{chr_name}.bedgraph",
+            output_file=f"temp_{chr_name}.bedgraph.gz",
             chromosome=chr_name,
             start_pos=start_pos,
             num_bins=num_bins
@@ -96,13 +101,18 @@ def generate_multi_chromosome_data(output_file: str = "multi_chr_rfd.bedgraph"):
     combined_data = pd.concat(all_data, ignore_index=True)
     combined_data = combined_data.sort_values(['chr', 'start'])
     
-    # Save combined file
-    combined_data.to_csv(output_file, sep='\t', index=False, header=False)
+    # Save combined file (gzipped if filename ends with .gz)
+    import gzip
+    if output_file.endswith('.gz'):
+        with gzip.open(output_file, 'wt') as f:
+            combined_data.to_csv(f, sep='\t', index=False, header=False)
+    else:
+        combined_data.to_csv(output_file, sep='\t', index=False, header=False)
     
     # Clean up temporary files
     import os
     for chr_num in [1, 2, 3]:
-        temp_file = f"temp_chr{chr_num}.bedgraph"
+        temp_file = f"temp_chr{chr_num}.bedgraph.gz"
         if os.path.exists(temp_file):
             os.remove(temp_file)
     
@@ -113,7 +123,7 @@ def generate_multi_chromosome_data(output_file: str = "multi_chr_rfd.bedgraph"):
 
 if __name__ == "__main__":
     # Generate single chromosome sample
-    generate_sample_rfd_data("sample_rfd_chr1.bedgraph")
+    generate_sample_rfd_data("sample_rfd_chr1.bedgraph.gz")
     
     # Generate multi-chromosome sample
-    generate_multi_chromosome_data("sample_rfd_multi.bedgraph")
+    generate_multi_chromosome_data("sample_rfd_multi.bedgraph.gz")

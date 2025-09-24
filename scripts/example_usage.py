@@ -19,7 +19,7 @@ def example_analysis():
     
     # Load sample data
     print("1. Loading sample data...")
-    data = analyzer.load_bedgraph("sample_rfd_chr1.bedgraph")
+    data = analyzer.load_bedgraph("sample_rfd_chr1.bedgraph.gz")
     print(f"   Loaded {len(data)} genomic bins")
     print(f"   RFD range: {data['RFD'].min():.3f} to {data['RFD'].max():.3f}\n")
     
@@ -66,7 +66,7 @@ def analyze_specific_region():
     print("\n=== Region-Specific Analysis ===\n")
     
     analyzer = RFDAnalyzer()
-    analyzer.load_bedgraph("sample_rfd_chr1.bedgraph")
+    analyzer.load_bedgraph("sample_rfd_chr1.bedgraph.gz")
     analyzer.find_peaks_and_valleys()
     analyzer.classify_zones()
     
@@ -99,7 +99,7 @@ def compare_parameters():
     
     for prom in prominence_values:
         analyzer = RFDAnalyzer(min_peak_prominence=prom)
-        analyzer.load_bedgraph("sample_rfd_chr1.bedgraph")
+        analyzer.load_bedgraph("sample_rfd_chr1.bedgraph.gz")
         peaks_data = analyzer.find_peaks_and_valleys()
         
         chrom_data = peaks_data['chr1']

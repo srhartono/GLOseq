@@ -1,6 +1,6 @@
 # Snakemake Workflow for RFD Analysis
 
-This directory contains a complete Snakemake workflow for analyzing RFD (Replication Fork Directionality) data from OK-seq experiments.
+This directory contains a complete Snakemake workflow for analyzing RFD (Replication Fork Directionality) data from OK-seq-like experiments (e.g. GLOe-seq).
 
 ## Directory Structure
 

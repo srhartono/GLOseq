@@ -10,17 +10,23 @@ import matplotlib.pyplot as plt
 
 def validate_bedgraph_format(filepath: str) -> bool:
     """
-    Validate that the input file is in proper bedgraph format
+    Validate that the input file is in proper bedgraph format (supports .bedgraph and .bedgraph.gz)
     
     Args:
-        filepath: Path to bedgraph file
+        filepath: Path to bedgraph file (.bedgraph or .bedgraph.gz)
         
     Returns:
         True if format is valid, False otherwise
     """
     try:
-        # Read first few lines
-        sample = pd.read_csv(filepath, sep='\t', nrows=10, header=None)
+        import gzip
+        
+        # Read first few lines, handling both regular and gzipped files
+        if filepath.endswith('.gz'):
+            with gzip.open(filepath, 'rt') as f:
+                sample = pd.read_csv(f, sep='\t', nrows=10, header=None)
+        else:
+            sample = pd.read_csv(filepath, sep='\t', nrows=10, header=None)
         
         # Check number of columns
         if sample.shape[1] != 4:
@@ -213,7 +219,12 @@ def batch_analyze_multiple_files(file_list: list, output_dir: str = "batch_resul
             analyzer.classify_zones()
             
             # Create output prefix
-            filename = os.path.basename(filepath).replace('.bedgraph', '')
+            filename = os.path.basename(filepath)
+            # Remove both .bedgraph.gz and .bedgraph extensions
+            if filename.endswith('.bedgraph.gz'):
+                filename = filename.replace('.bedgraph.gz', '')
+            elif filename.endswith('.bedgraph'):
+                filename = filename.replace('.bedgraph', '')
             output_prefix = os.path.join(output_dir, filename)
             
             # Export results
@@ -256,13 +267,13 @@ if __name__ == "__main__":
     print("Advanced RFD Analysis Example\n")
     
     # 1. Validate file format
-    if validate_bedgraph_format("sample_rfd_chr1.bedgraph"):
+    if validate_bedgraph_format("sample_rfd_chr1.bedgraph.gz"):
         
         # 2. Load and preprocess data
         analyzer = RFDAnalyzer(min_peak_prominence=0.15)
         
         # Load data
-        data = analyzer.load_bedgraph("sample_rfd_chr1.bedgraph")
+        data = analyzer.load_bedgraph("sample_rfd_chr1.bedgraph.gz")
         
         # Optional: Apply smoothing for noisy data
         # smoothed_data = smooth_rfd_data(data, window_size=3)

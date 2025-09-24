@@ -11,34 +11,34 @@ import glob
 
 # Configuration
 configfile: "config.yaml"
-
+print("Running Snakefile", file=sys.stderr)
 # Directory configuration
 INPUTS_DIR = "workflows/inputs"      # Main input directory for real data
 EXAMPLES_DIR = "workflows/examples"  # Example data directory
 RESULTS_DIR = "workflows/results"
 SCRIPTS_DIR = "scripts"
 
-# Find all .bedgraph files in both inputs and examples directories
+# Find all .bedgraph.gz files in both inputs and examples directories
 # Prioritize inputs folder, fall back to examples if inputs is empty
-inputs_files = glob.glob(f"{INPUTS_DIR}/*.bedgraph")
-examples_files = glob.glob(f"{EXAMPLES_DIR}/*.bedgraph")
+inputs_files = glob.glob(f"{INPUTS_DIR}/*.bedgraph.gz")
+examples_files = glob.glob(f"{EXAMPLES_DIR}/*.bedgraph.gz")
 
 if inputs_files:
     # Use real data from inputs folder
     BEDGRAPH_FILES = inputs_files
     INPUT_DIR = INPUTS_DIR
-    print(f"Using {len(inputs_files)} input files from {INPUTS_DIR}/")
+    print(f"Using {len(inputs_files)} input files from {INPUTS_DIR}/",file=sys.stderr)
 else:
     # Fall back to example data
     BEDGRAPH_FILES = examples_files
     INPUT_DIR = EXAMPLES_DIR
-    print(f"No files in {INPUTS_DIR}/, using {len(examples_files)} example files from {EXAMPLES_DIR}/")
+    print(f"No files in {INPUT_DIR}/, using {len(examples_files)} example files from {EXAMPLES_DIR}/", file=sys.stderr)
 
-SAMPLES = [os.path.basename(f).replace(".bedgraph", "") for f in BEDGRAPH_FILES]
+SAMPLES = [os.path.basename(f).replace(".bedgraph.gz", "") for f in BEDGRAPH_FILES]
 
 if not SAMPLES:
-    print(f"Warning: No .bedgraph files found in {INPUTS_DIR}/ or {EXAMPLES_DIR}/")
-    print("Please add your bedgraph files to one of these directories.")
+    print(f"Warning: No .bedgraph files found in {INPUT_DIR}/ or {EXAMPLES_DIR}/", file=sys.stderr)
+    print("Please add your bedgraph files to one of these directories.", file=sys.stderr)
     SAMPLES = []
 
 # Default rule - run all analyses
@@ -56,10 +56,10 @@ rule all:
         # Combined summary report
         f"{RESULTS_DIR}/combined_analysis_summary.tsv"
 
-# Rule to run RFD analysis on each bedgraph file
+# Rule to run RFD analysis on each bedgraph.gz file
 rule rfd_analysis:
     input:
-        bedgraph = f"{INPUT_DIR}/{{sample}}.bedgraph"
+        bedgraph = f"{INPUT_DIR}/{{sample}}.bedgraph.gz"
     output:
         critical_points = f"{RESULTS_DIR}/{{sample}}_critical_points.bed",
         zones = f"{RESULTS_DIR}/{{sample}}_zones.bed", 
@@ -74,7 +74,7 @@ rule rfd_analysis:
         f"{RESULTS_DIR}/logs/{{sample}}_analysis.log"
     shell:
         """
-        python {SCRIPTS_DIR}/rfd_analyzer.py {input.bedgraph} \
+        python {SCRIPTS_DIR}/rfd_analyzer.py {input.bedgraph.gz} \
             -o {params.output_prefix} \
             -d {params.min_distance} \
             -p {params.min_prominence} \
@@ -86,7 +86,7 @@ rule rfd_analysis:
 # Rule to generate individual summary reports
 rule generate_summary:
     input:
-        bedgraph = f"{INPUT_DIR}/{{sample}}.bedgraph",
+        bedgraph = f"{INPUT_DIR}/{{sample}}.bedgraph.gz",
         zones_detailed = f"{RESULTS_DIR}/{{sample}}_zones_detailed.tsv"
     output:
         summary = f"{RESULTS_DIR}/{{sample}}_summary.txt"
@@ -102,7 +102,7 @@ rule generate_summary:
         zones_df = pd.read_csv(input.zones_detailed, sep='\t')
         
         # Read original bedgraph for basic stats
-        bedgraph_df = pd.read_csv(input.bedgraph, sep='\t', 
+        bedgraph_df = pd.read_csv(input.bedgraph.gz, sep='\t', 
                                 names=['chr', 'start', 'end', 'RFD'])
         
         # Calculate statistics
@@ -141,7 +141,7 @@ rule generate_summary:
 # Rule to generate plots (conditional)
 rule generate_plot:
     input:
-        bedgraph = f"{INPUT_DIR}/{{sample}}.bedgraph",
+        bedgraph = f"{INPUT_DIR}/{{sample}}.bedgraph.gz",
         critical_points = f"{RESULTS_DIR}/{{sample}}_critical_points.bed",
         zones_detailed = f"{RESULTS_DIR}/{{sample}}_zones_detailed.tsv"
     output:
@@ -158,7 +158,7 @@ rule generate_plot:
         import numpy as np
         
         # Read data
-        bedgraph_df = pd.read_csv(input.bedgraph, sep='\t', 
+        bedgraph_df = pd.read_csv(input.bedgraph.gz, sep='\t', 
                                 names=['chr', 'start', 'end', 'RFD'])
         critical_points_df = pd.read_csv(input.critical_points, sep='\t',
                                        names=['chr', 'start', 'end', 'type', 'value'])
@@ -264,17 +264,17 @@ rule create_logs_dir:
 # Rule to copy example files to inputs directory for testing
 rule copy_examples_to_inputs:
     input:
-        expand(f"{EXAMPLES_DIR}/{{example}}.bedgraph", 
-               example=[os.path.basename(f).replace(".bedgraph", "") 
-                       for f in glob.glob(f"{EXAMPLES_DIR}/*.bedgraph")])
+        expand(f"{EXAMPLES_DIR}/{{example}}.bedgraph.gz", 
+               example=[os.path.basename(f).replace(".bedgraph.gz", "") 
+                       for f in glob.glob(f"{EXAMPLES_DIR}/*.bedgraph.gz")])
     output:
-        expand(f"{INPUTS_DIR}/{{example}}.bedgraph",
-               example=[os.path.basename(f).replace(".bedgraph", "") 
-                       for f in glob.glob(f"{EXAMPLES_DIR}/*.bedgraph")])
+        expand(f"{INPUTS_DIR}/{{example}}.bedgraph.gz",
+               example=[os.path.basename(f).replace(".bedgraph.gz", "") 
+                       for f in glob.glob(f"{EXAMPLES_DIR}/*.bedgraph.gz")])
     shell:
         """
         mkdir -p {INPUTS_DIR}
-        cp {EXAMPLES_DIR}/*.bedgraph {INPUTS_DIR}/
+        cp {EXAMPLES_DIR}/*.bedgraph.gz {INPUTS_DIR}/
         echo "Copied example files to inputs directory"
         """
 
