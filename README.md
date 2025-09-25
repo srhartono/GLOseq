@@ -1,6 +1,6 @@
-# RFD Analysis Tool for OK-seq Data
+# RFD Analysis Tool for RFD Data from GLOe-seq and OK-seq
 
-This tool analyzes Replication Fork Directionality (RFD) data from OK-seq experiments to identify replication features and zones.
+This tool analyzes Replication Fork Directionality (RFD) data from GLOe-seq and OK-seq experiments to identify replication features and zones.
 
 ## Features
 
