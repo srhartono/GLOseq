@@ -14,6 +14,11 @@ chromosome: ""               # e.g., "chr1" or "" for all
 # Output options
 generate_plots: true         # Generate visualization plots (true/false)
 
+# Liftover options
+liftover_to_hs1: true        # Enable liftover to hs1 (T2T-CHM13) assembly (true/false)
+source_assembly: "hg19"      # Source genome assembly (hg19, hg38, hs1)
+chain_files_dir: "workflows/misc"  # Directory containing liftover chain files
+
 # Advanced Parameters (optional)
 # ------------------------------
 

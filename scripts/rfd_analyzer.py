@@ -218,29 +218,44 @@ class RFDAnalyzer:
         # Export critical points (IS and TS)
         critical_points = []
         for chrom, data in self.peaks.items():
-            # Add IS (peaks)
+            # Add IS (peaks) - Red color
             for i, pos in enumerate(data['peaks']['positions']):
+                rfd_val = data['peaks']['values'][i]
+                score = min(1000, max(0, int((abs(rfd_val) * 1000))))  # Scale RFD to 0-1000
                 critical_points.append({
                     'chr': chrom,
                     'start': pos,
                     'end': pos + 10000,  # 10kb bins
-                    'feature_type': 'IS',
-                    'RFD_value': data['peaks']['values'][i]
+                    'name': f'IS_{abs(rfd_val):.3f}',
+                    'score': score,
+                    'strand': '.',
+                    'thickStart': pos,
+                    'thickEnd': pos + 10000,
+                    'itemRgb': '255,0,0'  # Red for IS
                 })
             
-            # Add TS (valleys)
+            # Add TS (valleys) - Blue color
             for i, pos in enumerate(data['valleys']['positions']):
+                rfd_val = data['valleys']['values'][i]
+                score = min(1000, max(0, int((abs(rfd_val) * 1000))))  # Scale RFD to 0-1000
                 critical_points.append({
                     'chr': chrom,
                     'start': pos,
                     'end': pos + 10000,  # 10kb bins
-                    'feature_type': 'TS',
-                    'RFD_value': data['valleys']['values'][i]
+                    'name': f'TS_{abs(rfd_val):.3f}',
+                    'score': score,
+                    'strand': '.',
+                    'thickStart': pos,
+                    'thickEnd': pos + 10000,
+                    'itemRgb': '0,0,255'  # Blue for TS
                 })
         
-        # Save critical points
+        # Save critical points in BED9 format with colors
         critical_df = pd.DataFrame(critical_points)
         critical_df = critical_df.sort_values(['chr', 'start'])
+        # Reorder columns for BED9 format
+        bed9_columns = ['chr', 'start', 'end', 'name', 'score', 'strand', 'thickStart', 'thickEnd', 'itemRgb']
+        critical_df = critical_df[bed9_columns]
         critical_df.to_csv(f"{output_prefix}_critical_points.bed", 
                           sep='\t', index=False, header=False)
         
@@ -253,10 +268,26 @@ class RFDAnalyzer:
         zones_df = pd.DataFrame(all_zones)
         zones_df = zones_df.sort_values(['chr', 'start'])
         
-        # Save zones as BED file
-        zones_bed = zones_df[['chr', 'start', 'end', 'zone_type']].copy()
-        zones_bed.to_csv(f"{output_prefix}_zones.bed", 
-                        sep='\t', index=False, header=False)
+        # Save zones as BED9 file with colors
+        zones_bed = zones_df.copy()
+        # Add BED9 columns with colors
+        zones_bed['name'] = zones_bed['zone_type'] + '_' + zones_bed['length'].astype(str)
+        zones_bed['score'] = zones_bed['length'].apply(lambda x: min(1000, max(0, int(x/1000))))  # Scale length to score
+        zones_bed['strand'] = '.'
+        zones_bed['thickStart'] = zones_bed['start']
+        zones_bed['thickEnd'] = zones_bed['end']
+        # Set colors: IZ = green (0,128,0), TZ = orange (255,165,0)
+        zones_bed['itemRgb'] = zones_bed['zone_type'].apply(
+            lambda x: '255,100,0' if x == 'IZ' else
+            '0,100,255' if x == "TZ" else
+            '255,200,0' if x == "Transition_IS_to_IS" else
+            '0,200,255' if x == "Transition_TS_to_TS" else '0,155,0'
+        )
+        
+        # Select and reorder columns for BED9 format
+        bed9_zones = zones_bed[['chr', 'start', 'end', 'name', 'score', 'strand', 'thickStart', 'thickEnd', 'itemRgb']]
+        bed9_zones.to_csv(f"{output_prefix}_zones.bed", 
+                         sep='\t', index=False, header=False)
         
         # Save detailed zones with all info
         zones_df.to_csv(f"{output_prefix}_zones_detailed.tsv", 
@@ -309,24 +340,24 @@ class RFDAnalyzer:
                 elif zone['zone_type'] == 'TZ':
                     plt.axvspan(zone['start'], zone['end'], alpha=0.2, color='orange', label='TZ')
         
-        plt.xlabel('Genomic Position')
+        plt.xlabel('Geznomic Pzosition')
         plt.ylabel('RFD Value')
         plt.title(f'RFD Analysis - Chromosome {chromosome}')
-        plt.legend()
+        # plt.legend()
         plt.grid(True, alpha=0.3)
         
         if output_file:
             plt.savefig(output_file, dpi=300, bbox_inches='tight')
             print(f"Plot saved to {output_file}")
         
-        plt.show()
+        # plt.show()
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze RFD data from OK-seq')
     parser.add_argument('input_file', help='Input bedgraph file')
     parser.add_argument('-o', '--output', default='rfd_analysis', 
                        help='Output prefix for result files')
-    parser.add_argument('-d', '--min-distance', type=int, default=10,
+    parser.add_argument('-d', '--min-distance', type=int, default=100,
                        help='Minimum distance between peaks (bins)')
     parser.add_argument('-p', '--min-prominence', type=float, default=0.1,
                        help='Minimum peak prominence')

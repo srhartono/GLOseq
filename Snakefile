@@ -54,7 +54,10 @@ rule all:
         # Plots (if enabled)
         expand(f"{RESULTS_DIR}/{{sample}}_plot.png", sample=SAMPLES) if config.get("generate_plots", True) else [],
         # Combined summary report
-        f"{RESULTS_DIR}/combined_analysis_summary.tsv"
+        f"{RESULTS_DIR}/combined_analysis_summary.tsv",
+        # Liftover results (if enabled)
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_critical_points.bed", sample=SAMPLES) if config.get("liftover_to_hs1", False) else [],
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_zones.bed", sample=SAMPLES) if config.get("liftover_to_hs1", False) else []
 
 # Rule to run RFD analysis on each bedgraph.gz file
 rule rfd_analysis:
@@ -74,7 +77,7 @@ rule rfd_analysis:
         f"{RESULTS_DIR}/logs/{{sample}}_analysis.log"
     shell:
         """
-        python {SCRIPTS_DIR}/rfd_analyzer.py {input.bedgraph.gz} \
+        python {SCRIPTS_DIR}/rfd_analyzer.py {input.bedgraph} \
             -o {params.output_prefix} \
             -d {params.min_distance} \
             -p {params.min_prominence} \
@@ -102,9 +105,11 @@ rule generate_summary:
         zones_df = pd.read_csv(input.zones_detailed, sep='\t')
         
         # Read original bedgraph for basic stats
-        bedgraph_df = pd.read_csv(input.bedgraph.gz, sep='\t', 
-                                names=['chr', 'start', 'end', 'RFD'])
-        
+        import gzip
+        with gzip.open(input.bedgraph, 'rt') as f:
+            bedgraph_df = pd.read_csv(f, sep='\t', 
+                                    names=['chr', 'start', 'end', 'RFD'])
+
         # Calculate statistics
         iz_zones = zones_df[zones_df['zone_type'] == 'IZ']
         tz_zones = zones_df[zones_df['zone_type'] == 'TZ']
@@ -158,8 +163,10 @@ rule generate_plot:
         import numpy as np
         
         # Read data
-        bedgraph_df = pd.read_csv(input.bedgraph.gz, sep='\t', 
-                                names=['chr', 'start', 'end', 'RFD'])
+        import gzip
+        with gzip.open(input.bedgraph, 'rt') as f:
+            bedgraph_df = pd.read_csv(f, sep='\t', 
+                                    names=['chr', 'start', 'end', 'RFD'])
         critical_points_df = pd.read_csv(input.critical_points, sep='\t',
                                        names=['chr', 'start', 'end', 'type', 'value'])
         zones_df = pd.read_csv(input.zones_detailed, sep='\t')
@@ -196,7 +203,7 @@ rule generate_plot:
             elif zone['zone_type'] == 'TZ':
                 plt.axvspan(zone['start'], zone['end'], alpha=0.2, color='orange')
         
-        plt.xlabel('Genomic Position')
+        plt.xlabel('Genomic Poszition')
         plt.ylabel('RFD Value')
         plt.title(f'RFD Analysis - {params.sample_name} ({first_chr})')
         plt.legend()
@@ -254,6 +261,130 @@ rule combine_summaries:
         combined_df = pd.DataFrame(combined_data)
         combined_df.to_csv(output.combined, sep='\t', index=False)
 
+# Liftover rules for genome assembly conversion
+# These rules convert coordinates from hg19 -> hg38 -> hs1 (T2T-CHM13)
+
+# Rule to liftover from original assembly (hg19) to hg38
+rule liftover_hg19_to_hg38:
+    input:
+        critical_points = f"{RESULTS_DIR}/{{sample}}_critical_points.bed",
+        zones = f"{RESULTS_DIR}/{{sample}}_zones.bed"
+    output:
+        critical_points = f"{RESULTS_DIR}/hg38/{{sample}}_critical_points.bed",
+        zones = f"{RESULTS_DIR}/hg38/{{sample}}_zones.bed"
+    params:
+        chain_file = "workflows/misc/hg19ToHg38.over.chain.gz",
+        sample = "{sample}"
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_liftover_hg19_to_hg38.log"
+    run:
+        import os
+        import subprocess
+        
+        # Create output directory
+        os.makedirs(os.path.dirname(output.critical_points), exist_ok=True)
+        
+        # Liftover critical points
+        cmd1 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.critical_points,
+            "--from", "hg19",
+            "--to", "hg38", 
+            "--chain-file", params.chain_file,
+            "--output", output.critical_points
+        ]
+        
+        with open(log[0], 'w') as logfile:
+            result1 = subprocess.run(cmd1, capture_output=True, text=True)
+            logfile.write(f"Critical points liftover:\n{result1.stdout}\n{result1.stderr}\n\n")
+            if result1.returncode != 0:
+                raise Exception(f"Critical points liftover failed: {result1.stderr}")
+        
+        # Liftover zones
+        cmd2 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.zones,
+            "--from", "hg19",
+            "--to", "hg38",
+            "--chain-file", params.chain_file,
+            "--output", output.zones
+        ]
+        
+        with open(log[0], 'a') as logfile:
+            result2 = subprocess.run(cmd2, capture_output=True, text=True)
+            logfile.write(f"Zones liftover:\n{result2.stdout}\n{result2.stderr}\n")
+            if result2.returncode != 0:
+                raise Exception(f"Zones liftover failed: {result2.stderr}")
+
+# Rule to liftover from hg38 to hs1 (T2T-CHM13)
+rule liftover_hg38_to_hs1:
+    input:
+        critical_points = f"{RESULTS_DIR}/hg38/{{sample}}_critical_points.bed",
+        zones = f"{RESULTS_DIR}/hg38/{{sample}}_zones.bed"
+    output:
+        critical_points = f"{RESULTS_DIR}/hs1/{{sample}}_critical_points.bed",
+        zones = f"{RESULTS_DIR}/hs1/{{sample}}_zones.bed"
+    params:
+        chain_file = "workflows/misc/hg38ToHs1.over.chain.gz",
+        sample = "{sample}"
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_liftover_hg38_to_hs1.log"
+    run:
+        import os
+        import subprocess
+        
+        # Create output directory
+        os.makedirs(os.path.dirname(output.critical_points), exist_ok=True)
+        
+        # Liftover critical points
+        cmd1 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.critical_points,
+            "--from", "hg38",
+            "--to", "hs1",
+            "--chain-file", params.chain_file,
+            "--output", output.critical_points
+        ]
+        
+        with open(log[0], 'w') as logfile:
+            result1 = subprocess.run(cmd1, capture_output=True, text=True)
+            logfile.write(f"Critical points liftover:\n{result1.stdout}\n{result1.stderr}\n\n")
+            if result1.returncode != 0:
+                raise Exception(f"Critical points liftover failed: {result1.stderr}")
+        
+        # Liftover zones
+        cmd2 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.zones,
+            "--from", "hg38",
+            "--to", "hs1",
+            "--chain-file", params.chain_file,
+            "--output", output.zones
+        ]
+        
+        with open(log[0], 'a') as logfile:
+            result2 = subprocess.run(cmd2, capture_output=True, text=True)
+            logfile.write(f"Zones liftover:\n{result2.stdout}\n{result2.stderr}\n")
+            if result2.returncode != 0:
+                raise Exception(f"Zones liftover failed: {result2.stderr}")
+
+# Combined rule for complete liftover pipeline (hg19 -> hg38 -> hs1)
+rule liftover_to_hs1:
+    input:
+        critical_points = f"{RESULTS_DIR}/hs1/{{sample}}_critical_points.bed",
+        zones = f"{RESULTS_DIR}/hs1/{{sample}}_zones.bed"
+    output:
+        touch(f"{RESULTS_DIR}/{{sample}}_liftover_complete.flag")
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_liftover_complete.log"
+    shell:
+        """
+        echo "Liftover pipeline complete for sample {wildcards.sample}" > {log}
+        echo "Files created:" >> {log}
+        echo "  - {input.critical_points}" >> {log} 
+        echo "  - {input.zones}" >> {log}
+        """
+
 # Rule to create logs directory
 rule create_logs_dir:
     output:
@@ -278,5 +409,137 @@ rule copy_examples_to_inputs:
         echo "Copied example files to inputs directory"
         """
 
+# Target rule for liftover only (run with: snakemake liftover_all)
+rule liftover_all:
+    input:
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_critical_points.bed", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_zones.bed", sample=SAMPLES)
+    message:
+        "Completed liftover for all samples from hg19 -> hg38 -> hs1"
+
 # Make sure logs directory exists before running analyses
 ruleorder: create_logs_dir > rfd_analysis
+
+# Clean rule to remove all result files
+rule clean:
+    run:
+        import os
+        import shutil
+        
+        print("Cleaning all result files...")
+        
+        # Remove the entire results directory
+        if os.path.exists(RESULTS_DIR):
+            shutil.rmtree(RESULTS_DIR)
+            print(f"Removed directory: {RESULTS_DIR}")
+        
+        # Remove any temporary files (skip .snakemake logs to avoid permission issues)
+        temp_files = [
+            "dag.svg", "dag.png", "dag.pdf",  # DAG visualization files
+            "*.pyc", "__pycache__"  # Python cache files
+        ]
+        
+        for pattern in temp_files:
+            if "*" in pattern:
+                import glob
+                for file in glob.glob(pattern):
+                    try:
+                        if os.path.isfile(file):
+                            os.remove(file)
+                            print(f"Removed file: {file}")
+                        elif os.path.isdir(file):
+                            shutil.rmtree(file)
+                            print(f"Removed directory: {file}")
+                    except (OSError, PermissionError) as e:
+                        print(f"Skipped {file}: {e}")
+            else:
+                try:
+                    if os.path.exists(pattern):
+                        if os.path.isfile(pattern):
+                            os.remove(pattern)
+                            print(f"Removed file: {pattern}")
+                        elif os.path.isdir(pattern):
+                            shutil.rmtree(pattern)
+                            print(f"Removed directory: {pattern}")
+                except (OSError, PermissionError) as e:
+                    print(f"Skipped {pattern}: {e}")
+        
+        print("Clean completed successfully!")
+        print("Note: Snakemake logs (.snakemake) are preserved to avoid permission issues")
+
+# Clean rule for results only (keeps Snakemake metadata)
+rule clean_results:
+    run:
+        import os
+        import shutil
+        
+        print("Cleaning result files only...")
+        
+        # Remove the entire results directory
+        if os.path.exists(RESULTS_DIR):
+            shutil.rmtree(RESULTS_DIR)
+            print(f"Removed directory: {RESULTS_DIR}")
+        else:
+            print(f"Directory {RESULTS_DIR} does not exist")
+        
+        print("Results cleanup completed!")
+
+# Clean Snakemake logs and metadata (run this separately when no Snakemake is running)
+rule clean_logs:
+    run:
+        import os
+        import shutil
+        
+        print("Cleaning Snakemake logs and metadata...")
+        
+        # Remove Snakemake metadata
+        if os.path.exists(".snakemake"):
+            try:
+                shutil.rmtree(".snakemake")
+                print("Removed Snakemake metadata: .snakemake")
+            except (OSError, PermissionError) as e:
+                print(f"Could not remove .snakemake: {e}")
+                print("Make sure no Snakemake processes are running and try again")
+        else:
+            print("No .snakemake directory found")
+        
+        print("Log cleanup completed!")
+
+# Help rule to show available commands
+rule help:
+    run:
+        print("""
+GLOseq Snakemake Workflow - Available Commands:
+
+MAIN ANALYSIS:
+  snakemake all                    - Run complete RFD analysis pipeline
+  snakemake --cores 4 all          - Run with 4 parallel cores
+
+INDIVIDUAL STEPS:
+  snakemake rfd_analysis           - Run RFD analysis only  
+  snakemake plot_results           - Generate plots only
+  snakemake summary_reports        - Generate summary reports only
+
+LIFTOVER (Genome Assembly Conversion):
+  snakemake liftover_all           - Convert coordinates: hg19 → hg38 → hs1
+  snakemake liftover_hg19_to_hg38  - Convert hg19 → hg38 only
+  snakemake liftover_hg38_to_hs1   - Convert hg38 → hs1 (T2T-CHM13) only
+
+UTILITY:
+  snakemake clean                  - Remove all results and temporary files
+  snakemake clean_results          - Remove results directory only
+  snakemake clean_logs             - Remove Snakemake logs (run when no processes active)
+  snakemake help                   - Show this help message
+  snakemake copy_examples_to_inputs- Copy example data to inputs folder
+
+VISUALIZATION:
+  snakemake --dag | dot -Tsvg > dag.svg     - Generate workflow DAG
+  snakemake --dry-run              - Show planned jobs without execution
+
+CONFIGURATION:
+  - Edit config.yaml for analysis parameters
+  - Place .bedgraph.gz files in workflows/inputs/
+  - Chain files for liftover in workflows/misc/
+
+For more details, see README.md and WORKFLOW_SUMMARY.md
+        """)

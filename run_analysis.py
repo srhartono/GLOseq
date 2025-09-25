@@ -14,24 +14,25 @@ def main():
     parent_dir = Path(__file__).parent.absolute()
     # print(parent_dir)
     # Default arguments
+    # "--dag",  # Print the DAG of jobs
     default_args = [
         "snakemake",
         "--cores", "1",  # Default to single core
-        "--dag",  # Print the DAG of jobs
-        "--use-conda",   # Use conda environments if available
+        # "--use-conda",   # Use conda environments if available
         "--printshellcmds"  # Print shell commands for transparency
     ]
-    VERSION = (parent_dir/"VERSION.txt").read_text().strip()
+    VERSION = (parent_dir/"VERSION.md").read_text().strip()
     # Add any additional arguments passed by user
     user_args = sys.argv[1:]
-    user_args = [arg for arg in user_args if arg != "--dryrun" and arg != "-0"] 
+    user_args = [arg for arg in user_args if arg != "--dryrun" and arg != "-0" and arg != "-c" and arg != "--clean" and arg != "-d" and arg != "--dag"] 
     myargs = args.ArgumentParser(description="RFD Analysis Snakemake Wrapper")
-    myargs.add_argument("-c", "--cores", type=int, help="Number of CPU cores to use [1]")
+    myargs.add_argument("-j", "--cores", type=int, help="Number of CPU cores to use [1]")
     #myargs.add_argument("-h", "--help", action="help", help="Show this help message and exit")
     myargs.add_argument("-v", "--version", action="version", version=f"%(prog)s {VERSION}", help="Version Information")
     myargs.add_argument("-m","--snakefile", type=str, default=str(parent_dir/"Snakefile"), help="Path to the Snakefile [default: %(default)s]")
     myargs.add_argument("-0","--dryrun", action="store_true", help="Perform a dry run without executing commands")
     myargs.add_argument("-d","--dag", action="store_true", help="Generate and save the DAG of jobs to dag.dot and dag.pdf")
+    myargs.add_argument("-c", "--clean", action="store_true", help="Remove all results and temporary files")
 
     myargs2 = myargs.parse_args()
     # Check if user specified cores, if so remove our default
@@ -41,6 +42,10 @@ def main():
     
     # Combine arguments
     all_args = default_args + user_args
+    if (myargs2.dag):
+        all_args += ["--dag"]
+    if (myargs2.clean):
+        all_args += ["clean"]
     
     # Print command for transparency
     print(f"Running: {' '.join(all_args)}")
@@ -56,9 +61,11 @@ def main():
         with open(dag_filename, "w") as dag_file:
             result = subprocess.run(all_args, check=True, stdout=dag_file, stderr=subprocess.PIPE, text=True)
 
-        from scripts import dot2pdf
-        print(dag_filename)
-        dot2pdf.main(dag_filename)
+        if myargs2.dag:
+            print(f"Generating DAG visualization to dag.pdf...")
+            from scripts import dot2pdf
+            print(dag_filename)
+            dot2pdf.main(dag_filename)
         
         return result.returncode
     except subprocess.CalledProcessError as e:
