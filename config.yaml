@@ -5,11 +5,23 @@
 # -------------------
 
 # Peak detection parameters
-min_peak_distance: 10        # Minimum distance between peaks (in bins)
-min_peak_prominence: 0.1     # Minimum prominence for peak detection (0.05-0.3 typical range)
+min_peak_distance: 25   # Minimum distance between peaks (in bins)
+min_peak_prominence: 0.2     # Minimum prominence for peak detection (0.05-0.3 typical range)
 
 # Optional: Analyze specific chromosome only (leave empty for all chromosomes)
 chromosome: ""               # e.g., "chr1" or "" for all
+
+# Transcription-Replication Conflict Analysis
+# -------------------------------------------
+gene_coordinates_file: "workflows/examples/hg19_apprisplus.bed"    # Path to gene coordinates file (BED, GTF, or GFF format)
+                                                               # Example: "annotations/genes.bed" or "annotations/gencode.gtf"
+                                                               # Leave empty to skip TRC analysis
+
+# TRC Peak Distribution Analysis
+create_peak_analysis: true      # Generate peak distribution analysis for TRC conflicts
+peak_analysis_prominence: 0.1   # Minimum prominence for TRC peak detection
+hotspot_window_size: 1000000    # Window size in bp for conflict hotspot detection (1Mb default)
+create_enhanced_plots: true     # Create detailed visualization plots for peak analysis
 
 # Output options
 generate_plots: true         # Generate visualization plots (true/false)

@@ -69,8 +69,8 @@ rule rfd_analysis:
         zones_detailed = f"{RESULTS_DIR}/{{sample}}_zones_detailed.tsv"
     params:
         output_prefix = f"{RESULTS_DIR}/{{sample}}",
-        min_distance = config.get("min_peak_distance", 10),
-        min_prominence = config.get("min_peak_prominence", 0.1),
+        min_distance = config.get("min_peak_distance", 100),
+        min_prominence = config.get("min_peak_prominence", 1),
         chromosome = config.get("chromosome", ""),
         plot_flag = "--plot" if config.get("generate_plots", True) else ""
     log:
@@ -392,6 +392,111 @@ rule create_logs_dir:
     shell:
         "mkdir -p {output}"
 
+# TRC Liftover rules - liftover TRC results from hg19 to hg38 to hs1
+# These rules ensure that TRC analysis is done in hg19, then results are lifted over
+
+# Rule to liftover TRC results from hg19 to hg38
+rule trc_liftover_hg19_to_hg38:
+    input:
+        head_on_genes = f"{RESULTS_DIR}/{{sample}}_head_on_genes.bed",
+        co_directional_genes = f"{RESULTS_DIR}/{{sample}}_co_directional_genes.bed"
+    output:
+        head_on_genes = f"{RESULTS_DIR}/hg38/{{sample}}_head_on_genes.bed",
+        co_directional_genes = f"{RESULTS_DIR}/hg38/{{sample}}_co_directional_genes.bed"
+    params:
+        chain_file = "workflows/misc/hg19ToHg38.over.chain.gz"
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_trc_liftover_hg19_to_hg38.log"
+    run:
+        import os
+        import subprocess
+        
+        # Create output directory
+        os.makedirs(os.path.dirname(output.head_on_genes), exist_ok=True)
+        
+        # Liftover head-on genes
+        cmd1 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.head_on_genes,
+            "--from", "hg19",
+            "--to", "hg38", 
+            "--chain-file", params.chain_file,
+            "--output", output.head_on_genes
+        ]
+        
+        with open(log[0], 'w') as logfile:
+            result1 = subprocess.run(cmd1, capture_output=True, text=True)
+            logfile.write(f"Head-on genes liftover:\n{result1.stdout}\n{result1.stderr}\n\n")
+            if result1.returncode != 0:
+                raise Exception(f"Head-on genes liftover failed: {result1.stderr}")
+        
+        # Liftover co-directional genes
+        cmd2 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.co_directional_genes,
+            "--from", "hg19",
+            "--to", "hg38",
+            "--chain-file", params.chain_file,
+            "--output", output.co_directional_genes
+        ]
+        
+        with open(log[0], 'a') as logfile:
+            result2 = subprocess.run(cmd2, capture_output=True, text=True)
+            logfile.write(f"Co-directional genes liftover:\n{result2.stdout}\n{result2.stderr}\n")
+            if result2.returncode != 0:
+                raise Exception(f"Co-directional genes liftover failed: {result2.stderr}")
+
+# Rule to liftover TRC results from hg38 to hs1
+rule trc_liftover_hg38_to_hs1:
+    input:
+        head_on_genes = f"{RESULTS_DIR}/hg38/{{sample}}_head_on_genes.bed",
+        co_directional_genes = f"{RESULTS_DIR}/hg38/{{sample}}_co_directional_genes.bed"
+    output:
+        head_on_genes = f"{RESULTS_DIR}/hs1/{{sample}}_head_on_genes.bed",
+        co_directional_genes = f"{RESULTS_DIR}/hs1/{{sample}}_co_directional_genes.bed"
+    params:
+        chain_file = "workflows/misc/hg38ToHs1.over.chain.gz"
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_trc_liftover_hg38_to_hs1.log"
+    run:
+        import os
+        import subprocess
+        
+        # Create output directory
+        os.makedirs(os.path.dirname(output.head_on_genes), exist_ok=True)
+        
+        # Liftover head-on genes
+        cmd1 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.head_on_genes,
+            "--from", "hg38",
+            "--to", "hs1",
+            "--chain-file", params.chain_file,
+            "--output", output.head_on_genes
+        ]
+        
+        with open(log[0], 'w') as logfile:
+            result1 = subprocess.run(cmd1, capture_output=True, text=True)
+            logfile.write(f"Head-on genes liftover:\n{result1.stdout}\n{result1.stderr}\n\n")
+            if result1.returncode != 0:
+                raise Exception(f"Head-on genes liftover failed: {result1.stderr}")
+        
+        # Liftover co-directional genes
+        cmd2 = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe", f"{SCRIPTS_DIR}/liftover_annotations.py",
+            input.co_directional_genes,
+            "--from", "hg38",
+            "--to", "hs1",
+            "--chain-file", params.chain_file,
+            "--output", output.co_directional_genes
+        ]
+        
+        with open(log[0], 'a') as logfile:
+            result2 = subprocess.run(cmd2, capture_output=True, text=True)
+            logfile.write(f"Co-directional genes liftover:\n{result2.stdout}\n{result2.stderr}\n")
+            if result2.returncode != 0:
+                raise Exception(f"Co-directional genes liftover failed: {result2.stderr}")
+
 # Rule to copy example files to inputs directory for testing
 rule copy_examples_to_inputs:
     input:
@@ -412,13 +517,161 @@ rule copy_examples_to_inputs:
 # Target rule for liftover only (run with: snakemake liftover_all)
 rule liftover_all:
     input:
+        # Basic RFD results
         expand(f"{RESULTS_DIR}/hs1/{{sample}}_critical_points.bed", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/hs1/{{sample}}_zones.bed", sample=SAMPLES)
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_zones.bed", sample=SAMPLES),
+        # TRC results (if gene coordinates file is provided)
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_head_on_genes.bed", sample=SAMPLES) if config.get("gene_coordinates_file", "") else [],
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_co_directional_genes.bed", sample=SAMPLES) if config.get("gene_coordinates_file", "") else []
     message:
         "Completed liftover for all samples from hg19 -> hg38 -> hs1"
 
 # Make sure logs directory exists before running analyses
 ruleorder: create_logs_dir > rfd_analysis
+
+# Rule for transcription-replication conflict analysis
+rule trc_analysis:
+    input:
+        genes = config.get("gene_coordinates_file", ""),  # Gene coordinates file
+        critical_points = f"{RESULTS_DIR}/{{sample}}_critical_points.bed",
+        zones = f"{RESULTS_DIR}/{{sample}}_zones.bed",
+        rfd_data = f"{INPUT_DIR}/{{sample}}.bedgraph.gz"
+    output:
+        trc_results = f"{RESULTS_DIR}/{{sample}}_trc_analysis.tsv",
+        head_on_genes = f"{RESULTS_DIR}/{{sample}}_head_on_genes.bed",
+        co_directional_genes = f"{RESULTS_DIR}/{{sample}}_co_directional_genes.bed"
+    params:
+        output_prefix = f"{RESULTS_DIR}/{{sample}}"
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_trc_analysis.log"
+    run:
+        import os
+        import subprocess
+        
+        # Check if gene coordinates file is provided
+        if not input.genes or not os.path.exists(input.genes):
+            with open(log[0], 'w') as logfile:
+                logfile.write("No gene coordinates file provided or file not found.\n")
+                logfile.write("Set 'gene_coordinates_file' in config.yaml to enable TRC analysis.\n")
+            
+            # Create empty output files
+            for output_file in output:
+                with open(output_file, 'w') as f:
+                    if output_file.endswith('.tsv'):
+                        f.write("# No gene coordinates provided - TRC analysis skipped\n")
+                    else:
+                        f.write("# No gene coordinates provided - TRC analysis skipped\n")
+            return
+        
+        # Run TRC analysis
+        cmd = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe",
+            f"{SCRIPTS_DIR}/trc_analyzer.py",
+            "--genes", input.genes,
+            "--rfd-data", input.rfd_data,
+            "--critical-points", input.critical_points,
+            "--zones", input.zones,
+            "--output", params.output_prefix,
+            "--formats", "tsv", "bed"
+        ]
+        
+        with open(log[0], 'w') as logfile:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            logfile.write(f"TRC analysis command: {' '.join(cmd)}\n\n")
+            logfile.write(f"STDOUT:\n{result.stdout}\n\n")
+            logfile.write(f"STDERR:\n{result.stderr}\n")
+            
+            if result.returncode != 0:
+                raise Exception(f"TRC analysis failed with return code {result.returncode}")
+
+# Rule for TRC peak distribution analysis
+rule trc_peak_analysis:
+    input:
+        trc_results = f"{RESULTS_DIR}/{{sample}}_trc_analysis.tsv",
+        critical_points = f"{RESULTS_DIR}/{{sample}}_critical_points.bed"
+    output:
+        peak_report = f"{RESULTS_DIR}/{{sample}}_peak_analysis_report.txt",
+        peak_plot = f"{RESULTS_DIR}/{{sample}}_peak_distributions.png",
+        enhanced_results = f"{RESULTS_DIR}/{{sample}}_enhanced_trc_results.tsv"
+    params:
+        output_prefix = f"{RESULTS_DIR}/{{sample}}"
+    log:
+        f"{RESULTS_DIR}/logs/{{sample}}_peak_analysis.log"
+    run:
+        import subprocess
+        import shutil
+        import os
+        
+        # Use temporary prefix to avoid name conflicts
+        temp_prefix = f"{RESULTS_DIR}/{wildcards.sample}_temp_peak_analysis"
+        
+        cmd = [
+            "C:/cygwin64/home/srhar/GLOseq/.venv/Scripts/python.exe",
+            f"{SCRIPTS_DIR}/trc_peak_analyzer.py",
+            "--trc-results", input.trc_results,
+            "--critical-points", input.critical_points,
+            "--output", temp_prefix,
+            "--create-plots"
+        ]
+        
+        # Run command and capture output
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # Write log
+        with open(log[0], 'w') as logfile:
+            logfile.write(f"Peak analysis command: {' '.join(cmd)}\n\n")
+            logfile.write(f"STDOUT:\n{result.stdout}\n\n")
+            logfile.write(f"STDERR:\n{result.stderr}\n")
+            
+            if result.returncode != 0:
+                raise Exception(f"Peak analysis failed with return code {result.returncode}")
+            
+            # Move files to expected names
+            temp_files = {
+                f"{temp_prefix}_peak_analysis_report.txt": output.peak_report,
+                f"{temp_prefix}_peak_distributions.png": output.peak_plot,
+                f"{temp_prefix}_enhanced_trc_results.tsv": output.enhanced_results
+            }
+            
+            for temp_file, final_file in temp_files.items():
+                if os.path.exists(temp_file):
+                    shutil.move(temp_file, final_file)
+                    logfile.write(f"Moved {temp_file} to {final_file}\n")
+
+# Rule to run TRC analysis for all samples (hg19 only)
+rule trc_all:
+    input:
+        expand(f"{RESULTS_DIR}/{{sample}}_trc_analysis.tsv", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/{{sample}}_head_on_genes.bed", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/{{sample}}_co_directional_genes.bed", sample=SAMPLES)
+    message:
+        "Completed transcription-replication conflict analysis for all samples (hg19 coordinates)"
+
+# Rule to run TRC analysis with liftover to all assemblies
+rule trc_all_assemblies:
+    input:
+        # hg19 results (original analysis)
+        expand(f"{RESULTS_DIR}/{{sample}}_trc_analysis.tsv", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/{{sample}}_head_on_genes.bed", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/{{sample}}_co_directional_genes.bed", sample=SAMPLES),
+        # Lifted over results (if liftover is enabled)
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_head_on_genes.bed", sample=SAMPLES) if config.get("liftover_to_hs1", False) else [],
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_co_directional_genes.bed", sample=SAMPLES) if config.get("liftover_to_hs1", False) else []
+    message:
+        "Completed TRC analysis for all samples with liftover to all assemblies"
+
+# Rule to run complete TRC analysis including peaks and liftover
+rule trc_complete:
+    input:
+        # Peak analysis results
+        expand(f"{RESULTS_DIR}/{{sample}}_peak_analysis_report.txt", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/{{sample}}_peak_distributions.png", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/{{sample}}_enhanced_trc_results.tsv", sample=SAMPLES),
+        # TRC results with liftover (if enabled)
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_head_on_genes.bed", sample=SAMPLES) if config.get("liftover_to_hs1", False) else [],
+        expand(f"{RESULTS_DIR}/hs1/{{sample}}_co_directional_genes.bed", sample=SAMPLES) if config.get("liftover_to_hs1", False) else []
+    message:
+        "Completed comprehensive TRC analysis with peak distributions and liftover for all samples"
 
 # Clean rule to remove all result files
 rule clean:
@@ -519,6 +772,7 @@ INDIVIDUAL STEPS:
   snakemake rfd_analysis           - Run RFD analysis only  
   snakemake plot_results           - Generate plots only
   snakemake summary_reports        - Generate summary reports only
+  snakemake trc_all                - Run transcription-replication conflict analysis
 
 LIFTOVER (Genome Assembly Conversion):
   snakemake liftover_all           - Convert coordinates: hg19 → hg38 → hs1

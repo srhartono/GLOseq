@@ -357,9 +357,9 @@ def main():
     parser.add_argument('input_file', help='Input bedgraph file')
     parser.add_argument('-o', '--output', default='rfd_analysis', 
                        help='Output prefix for result files')
-    parser.add_argument('-d', '--min-distance', type=int, default=100,
+    parser.add_argument('-d', '--min-distance', type=int, default=1000000,
                        help='Minimum distance between peaks (bins)')
-    parser.add_argument('-p', '--min-prominence', type=float, default=0.1,
+    parser.add_argument('-p', '--min-prominence', type=float, default=1,
                        help='Minimum peak prominence')
     parser.add_argument('-c', '--chromosome', 
                        help='Analyze specific chromosome only')
